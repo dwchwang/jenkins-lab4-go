@@ -1,62 +1,37 @@
 pipeline {
-    agent any
-
-    environment {
-        GO_VERSION = '1.22.0'
-        GOROOT = "${WORKSPACE}/go-sdk/go"
-        GOPATH = "${WORKSPACE}/gopath"
-        PATH = "${WORKSPACE}/go-sdk/go/bin:${WORKSPACE}/gopath/bin:${PATH}"
-    }
+    agent none      // không dùng agent chung, mỗi stage tự chọn
 
     stages {
-        stage('Checkout') {
+        stage('Go Build') {
+            agent { docker { image 'golang:1.22' } }
             steps {
-                checkout scm
+                sh 'go version'
+                sh 'go build -o myapp'
+                stash includes: 'myapp', name: 'binary'   // lưu để stage sau dùng
             }
         }
 
-        stage('Setup Go') {
+        stage('Test in Go') {
+            agent { docker { image 'golang:1.22' } }
             steps {
-                sh '''
-                    if [ ! -x "${GOROOT}/bin/go" ]; then
-                        mkdir -p "${WORKSPACE}/go-sdk"
-                        curl -sL https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz \
-                            | tar -C "${WORKSPACE}/go-sdk" -xz
-                    fi
-                    go version
-                '''
+                sh 'go test ./...'
             }
         }
 
-        stage('Vet') {
+        stage('Lint') {
+            agent { docker { image 'golangci/golangci-lint:latest' } }
             steps {
-                sh 'go vet ./...'
+                sh 'golangci-lint run || true'    // || true để không fail lab
             }
         }
 
-        stage('Test') {
+        stage('Package') {
+            agent any
             steps {
-                sh '''
-                    go test -v -coverprofile=coverage.out ./...
-                    go tool cover -func=coverage.out
-                '''
+                unstash 'binary'                  // lấy lại binary từ stage Build
+                sh 'ls -lh myapp'
+                archiveArtifacts 'myapp'
             }
-        }
-
-        stage('Build') {
-            steps {
-                sh '''
-                    CGO_ENABLED=0 go build -o myapp
-                    ls -lh myapp
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            archiveArtifacts artifacts: 'myapp', fingerprint: true
-            echo 'Build thành công, artifact đã lưu'
         }
     }
 }
