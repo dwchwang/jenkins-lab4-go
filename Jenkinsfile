@@ -1,45 +1,25 @@
 pipeline {
     agent any
 
-    environment {
-        GO_VERSION = '1.22.0'
-        GO_ROOT = "${WORKSPACE}/go"
-        PATH = "${WORKSPACE}/go/bin:${env.PATH}"
-    }
-
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Setup Go') {
+        stage('Check Go') {
             steps {
                 sh '''
                     set -e
-
-                    echo "=== Setup Go ==="
-
-                    if [ ! -x "$GO_ROOT/bin/go" ]; then
-                        echo "Go not found. Installing Go ${GO_VERSION}..."
-
-                        rm -rf "$GO_ROOT"
-                        mkdir -p "$GO_ROOT"
-
-                        curl -fL \
-                            "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
-                            -o /tmp/go.tar.gz
-
-                        tar -xzf /tmp/go.tar.gz \
-                            -C "$WORKSPACE"
-
-                        rm -f /tmp/go.tar.gz
-                    fi
-
-                    echo "Go version:"
+                    echo "=== Go ==="
+                    which go
                     go version
+
+                    echo "=== Go environment ==="
+                    go env GOROOT
+                    go env GOPATH
+                    go env GOMOD
                 '''
             }
         }
@@ -57,10 +37,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
-
-                    go test -v \
-                        -coverprofile=coverage.out \
-                        ./...
+                    go test -v -coverprofile=coverage.out ./...
 
                     echo "=== Coverage ==="
                     go tool cover -func=coverage.out
@@ -73,10 +50,7 @@ pipeline {
                 sh '''
                     set -e
 
-                    CGO_ENABLED=0 \
-                    GOOS=linux \
-                    GOARCH=amd64 \
-                    go build -o myapp .
+                    CGO_ENABLED=0 go build -o myapp .
 
                     echo "=== Binary ==="
                     ls -lh myapp
@@ -88,19 +62,16 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts \
-                artifacts: 'myapp,coverage.out', \
+            archiveArtifacts(
+                artifacts: 'myapp,coverage.out',
                 fingerprint: true
+            )
 
-            echo 'Build thành công, artifact đã được archive.'
+            echo 'Build thành công, artifact đã được archive'
         }
 
         failure {
-            echo 'Pipeline FAILED.'
-        }
-
-        always {
-            echo "Build number: ${BUILD_NUMBER}"
+            echo 'Pipeline FAILED'
         }
     }
 }
