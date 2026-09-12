@@ -2,7 +2,10 @@ pipeline {
     agent any
 
     environment {
-        GO = '/usr/bin/go'
+        GO_VERSION = '1.22.0'
+        GOROOT = "${WORKSPACE}/go-sdk/go"
+        GOPATH = "${WORKSPACE}/gopath"
+        PATH = "${WORKSPACE}/go-sdk/go/bin:${WORKSPACE}/gopath/bin:${PATH}"
     }
 
     stages {
@@ -12,40 +15,30 @@ pipeline {
             }
         }
 
-        stage('Check Go') {
+        stage('Setup Go') {
             steps {
                 sh '''
-                    set -e
-
-                    echo "=== Go ==="
-                    /usr/bin/go version
-                    /usr/bin/go env GOROOT
-                    /usr/bin/go env GOPATH
-                    /usr/bin/go env GOMOD
+                    if [ ! -x "${GOROOT}/bin/go" ]; then
+                        mkdir -p "${WORKSPACE}/go-sdk"
+                        curl -sL https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz \
+                            | tar -C "${WORKSPACE}/go-sdk" -xz
+                    fi
+                    go version
                 '''
             }
         }
 
         stage('Vet') {
             steps {
-                sh '''
-                    set -e
-                    /usr/bin/go vet ./...
-                '''
+                sh 'go vet ./...'
             }
         }
 
         stage('Test') {
             steps {
                 sh '''
-                    set -e
-
-                    /usr/bin/go test -v \
-                        -coverprofile=coverage.out \
-                        ./...
-
-                    echo "=== Coverage ==="
-                    /usr/bin/go tool cover -func=coverage.out
+                    go test -v -coverprofile=coverage.out ./...
+                    go tool cover -func=coverage.out
                 '''
             }
         }
@@ -53,14 +46,8 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
-                    set -e
-
-                    CGO_ENABLED=0 \
-                    /usr/bin/go build -o myapp .
-
-                    echo "=== Binary ==="
+                    CGO_ENABLED=0 go build -o myapp
                     ls -lh myapp
-                    file myapp
                 '''
             }
         }
@@ -68,16 +55,8 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts(
-                artifacts: 'myapp,coverage.out',
-                fingerprint: true
-            )
-
-            echo 'Build thành công, artifact đã được archive'
-        }
-
-        failure {
-            echo 'Pipeline FAILED'
+            archiveArtifacts artifacts: 'myapp', fingerprint: true
+            echo 'Build thành công, artifact đã lưu'
         }
     }
 }
