@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        GO = '/usr/bin/go'
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -12,14 +16,12 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    echo "=== Go ==="
-                    which go
-                    go version
 
-                    echo "=== Go environment ==="
-                    go env GOROOT
-                    go env GOPATH
-                    go env GOMOD
+                    echo "=== Go ==="
+                    /usr/bin/go version
+                    /usr/bin/go env GOROOT
+                    /usr/bin/go env GOPATH
+                    /usr/bin/go env GOMOD
                 '''
             }
         }
@@ -28,7 +30,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    go vet ./...
+                    /usr/bin/go vet ./...
                 '''
             }
         }
@@ -37,10 +39,13 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    go test -v -coverprofile=coverage.out ./...
+
+                    /usr/bin/go test -v \
+                        -coverprofile=coverage.out \
+                        ./...
 
                     echo "=== Coverage ==="
-                    go tool cover -func=coverage.out
+                    /usr/bin/go tool cover -func=coverage.out
                 '''
             }
         }
@@ -50,7 +55,8 @@ pipeline {
                 sh '''
                     set -e
 
-                    CGO_ENABLED=0 go build -o myapp .
+                    CGO_ENABLED=0 \
+                    /usr/bin/go build -o myapp .
 
                     echo "=== Binary ==="
                     ls -lh myapp
